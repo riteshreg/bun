@@ -1,0 +1,4 @@
+[test]
+
+# always enable coverage
+coverageSkipTestFiles = true       # default false
