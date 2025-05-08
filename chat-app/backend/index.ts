@@ -1,1 +1,71 @@
-console.log("Hello via Bun!");
+import { db, insertMessage, listAllMessage } from './db/client'
+const CHAT_GROUP_NAME = "group-chat";
+
+if (process.env.MIGRATE === "true") {
+    await import("./db/migrate");
+}
+
+const server = Bun.serve<{ username: string }, any>({
+    routes: {
+        // Static routes
+        "/": () =>
+            new Response("welcome to chatapp backend!", {
+                headers: { "X-resp": "hi" },
+            }),
+        "/api/status": new Response("OK"),
+        "/chat": (req, server) => {
+            //   getting username from header
+            const username = req.headers.get("username");
+            //   returning a error if username is not defined
+            if (!username) {
+                return new Response("Username is Required", {
+                    status: 400,
+                    statusText: "Username is Required",
+                });
+            }
+
+            const success = server.upgrade(req, { data: { username } });
+            if (success) {
+                // Bun automatically returns a 101 Switching Protocols
+                // if the upgrade succeeds
+                return;
+            }
+
+            // handle HTTP request normally
+            return new Response("WebSocket connection required", { status: 400 });
+        },
+    },
+    websocket: {
+        async open(ws) {
+            // subscribing to a group chat with bun build in ws method
+            ws.subscribe(CHAT_GROUP_NAME);
+            const msg = `${ws.data.username} has joined the chat`;
+            // publishing a joining msg to a group
+            ws.publish(CHAT_GROUP_NAME, msg);
+
+            const history = await listAllMessage();
+
+            for (const msg of history) {
+                ws.send(msg.message)
+            }
+        },
+
+        // this is called when a message is received
+        async message(ws, message) {
+            const text = message.toString();
+            await insertMessage({ message: text })
+            ws.publish(CHAT_GROUP_NAME, message);
+        },
+        close(ws) {
+            const msg = `${ws.data.username} has left the chat`;
+            server.publish(CHAT_GROUP_NAME, msg);
+            ws.unsubscribe(CHAT_GROUP_NAME);
+        },
+    },
+    fetch() {
+        return new Response("Path Not Found", { status: 500 });
+    },
+    port: process.env.PORT ?? 3001,
+});
+
+console.log(`listining at port ${server.port} `);
