@@ -1,0 +1,1 @@
+ALTER TABLE `chats` ADD `username` text DEFAULT 'anonymous' NOT NULL;

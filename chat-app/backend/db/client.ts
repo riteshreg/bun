@@ -8,13 +8,25 @@ export const db = drizzle(sqlite, { schema });
 
 export const insertMessage = async ({
   message,
-}: Pick<schema.Chat, "message">) => {
-  await db.insert(schema.Chats).values({
-    date: new Date().toISOString(),
-    message,
-  });
+  username,
+}: Pick<schema.Chat, "message" | "username">) => {
+  return (
+    await db
+      .insert(schema.Chats)
+      .values({
+        date: new Date().toISOString(),
+        message,
+        username,
+      })
+      .returning()
+  )[0];
 };
 
 export const listAllMessage = async () => {
-  return (await db.query.Chats.findMany({ limit: 10 })).reverse();
+  return (
+    await db.query.Chats.findMany({
+      orderBy: desc(schema.Chats.date),
+      limit: 10,
+    })
+  ).reverse();
 };

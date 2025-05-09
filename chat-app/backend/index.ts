@@ -1,4 +1,4 @@
-import { db, insertMessage, listAllMessage } from './db/client'
+import { db, insertMessage, listAllMessage } from "./db/client";
 const CHAT_GROUP_NAME = "group-chat";
 
 if (process.env.MIGRATE === "true") {
@@ -14,8 +14,9 @@ const server = Bun.serve<{ username: string }, any>({
             }),
         "/api/status": new Response("OK"),
         "/chat": (req, server) => {
-            //   getting username from header
-            const username = req.headers.get("username");
+            const url = new URL(req.url);
+            const username = url.searchParams.get("username");
+
             //   returning a error if username is not defined
             if (!username) {
                 return new Response("Username is Required", {
@@ -39,26 +40,30 @@ const server = Bun.serve<{ username: string }, any>({
         async open(ws) {
             // subscribing to a group chat with bun build in ws method
             ws.subscribe(CHAT_GROUP_NAME);
-            const msg = `${ws.data.username} has joined the chat`;
-            // publishing a joining msg to a group
-            ws.publish(CHAT_GROUP_NAME, msg);
 
             const history = await listAllMessage();
 
             for (const msg of history) {
-                ws.send(msg.message)
+                const msg_string = JSON.stringify(msg);
+                ws.send(msg_string);
             }
         },
 
         // this is called when a message is received
         async message(ws, message) {
             const text = message.toString();
-            await insertMessage({ message: text })
-            ws.publish(CHAT_GROUP_NAME, message);
+            const msg = await insertMessage({
+                message: text,
+                username: ws.data.username,
+            });
+            if (!msg) return;
+            const msg_string = JSON.stringify(msg);
+            // publishing to other users,
+            ws.publish(CHAT_GROUP_NAME, msg_string);
+            // also sending back to the client with id and other stuff
+            ws.send(msg_string);
         },
         close(ws) {
-            const msg = `${ws.data.username} has left the chat`;
-            server.publish(CHAT_GROUP_NAME, msg);
             ws.unsubscribe(CHAT_GROUP_NAME);
         },
     },
