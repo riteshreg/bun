@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "react-hot-toast";
-import { Textarea } from "~/components/ui/textarea";
 import { SendHorizonalIcon } from "lucide-react";
-import ChatCard from "~/components/ChatCard";
+import { useEffect, useRef, useState } from "react";
+import { OtherChat, MyChat } from "~/components/ChatCard";
+import { Textarea } from "~/components/ui/textarea";
 
 export type Chat = {
   date: string;
@@ -21,13 +20,13 @@ function Home() {
   const [input, setInput] = useState("");
   const socketRef = useRef<WebSocket | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerYPositionRef = useRef<number>(0);
 
   useEffect(() => {
     const socket = new WebSocket("ws://localhost:3001/chat?username=web");
     socketRef.current = socket;
 
     socket.onopen = () => {
-      // toast.success("connected to a server successfully..")
       console.log("Connected to WebSocket");
     };
 
@@ -50,6 +49,28 @@ function Home() {
     scrollToBottom();
   }, [messages]);
 
+  // this effect will tract the scrollposition of the message div
+  useEffect(() => {
+    const el = containerRef.current;
+
+    const handleScroll = () => {
+      if (el) {
+        const scrollTop = el.scrollTop;
+        containerYPositionRef.current = scrollTop;
+      }
+    };
+
+    if (el) {
+      el.addEventListener("scroll", handleScroll);
+    }
+
+    return () => {
+      if (el) {
+        el.removeEventListener("scroll", handleScroll);
+      }
+    };
+  }, []);
+
   function handleMsgSend() {
     // checking if socketRef is available
     if (!socketRef.current) return;
@@ -62,7 +83,19 @@ function Home() {
 
   function scrollToBottom() {
     const el = containerRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
+    if (!el) return;
+
+    const currentPosition = containerYPositionRef.current
+
+    const sub = (el.scrollHeight - 500) - currentPosition;
+
+    // if the current position is at top which mean we want the position at bottom;
+    if (currentPosition === 0) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
+    } else if (sub < 400) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
+    }
+
   }
 
   return (
@@ -71,9 +104,13 @@ function Home() {
       <div className="max-w-3xl mx-auto h-[92vh] border-2 rounded-md">
         {/* message section << */}
         <div ref={containerRef} className="h-[88%] overflow-y-scroll py-2 px-4">
-          {messages.map((msg) => (
-            <ChatCard key={msg.id.toString()} chat={msg} />
-          ))}
+          {messages.map((msg) =>
+            msg.username === "web" ? (
+              <MyChat key={msg.id} chat={msg} />
+            ) : (
+              <OtherChat key={msg.id} chat={msg} />
+            )
+          )}
         </div>
         {/* message section >> */}
 
